@@ -9,11 +9,20 @@ on:
   repository_dispatch:
     types: [ repob_push_main ]
 
+concurrency:
+  group: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'repob_push_main' && 'build-solution1-repob-push-main' || format('build-solution1-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'repob_push_main' }}
+
 jobs:
   build_ab:
     runs-on: windows-2022
 
     steps:
+      - name: Debounce RepoB dispatch
+        if: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'repob_push_main' }}
+        shell: pwsh
+        run: Start-Sleep -Seconds 60
+
       - name: Checkout RepoA
         uses: actions/checkout@v4
         with:
