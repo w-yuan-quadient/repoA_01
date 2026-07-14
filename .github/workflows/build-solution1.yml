@@ -25,3 +25,32 @@ jobs:
           repository: w-yuan-quadient/RepoB_01
           path: RepoB
           token: ${{ secrets.GENERAL_TOKAN_20260714 }}
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Solution1
+        shell: pwsh
+        run: |
+          msbuild RepoA\Solution1_AB.sln /m /p:Configuration=Release /p:Platform=x64
+
+      - name: Package A and B artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts\VectorAdd\include, artifacts\VectorAdd\lib, artifacts\VectorAdd\bin | Out-Null
+          New-Item -ItemType Directory -Force artifacts\VectorMul\include, artifacts\VectorMul\lib, artifacts\VectorMul\bin | Out-Null
+
+          Copy-Item RepoA\VectorAdd\VectorAdd.h artifacts\VectorAdd\include\
+          Copy-Item RepoA\bin\x64\Release\VectorAdd.lib artifacts\VectorAdd\lib\
+          Copy-Item RepoA\bin\x64\Release\VectorAdd.dll artifacts\VectorAdd\bin\
+
+          Copy-Item RepoB\VectorMul\VectorMul.h artifacts\VectorMul\include\
+          Copy-Item RepoA\bin\x64\Release\VectorMul.lib artifacts\VectorMul\lib\
+          Copy-Item RepoA\bin\x64\Release\VectorMul.dll artifacts\VectorMul\bin\
+
+      - name: Upload A+B artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vector-libs-x64-release
+          path: artifacts
+
