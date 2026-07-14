@@ -6,15 +6,68 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-  repository_dispatch:
-    types: [ repob_push_main ]
+#  repository_dispatch:
+#    types: [ repob_push_main ]
+  schedule:
+    - cron: '*/5 * * * *'
 
 concurrency:
   group: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'repob_push_main' && 'build-solution1-repob-push-main' || format('build-solution1-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'repob_push_main' }}
 
 jobs:
+  check_repob_main:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+      latest_sha: ${{ steps.compare.outputs.latest_sha }}
+
+    steps:
+      - name: Check RepoB main SHA
+        id: compare
+        env:
+          GH_TOKEN: ${{ secrets.GENERAL_TOKAN_20260714 }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Secret GENERAL_TOKAN_20260714 is empty or unavailable in this workflow context"
+            exit 1
+          fi
+
+          variable_status=$(curl --silent --show-error -L \
+            --write-out "%{http_code}" \
+            --output variable.json \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/w-yuan-quadient/repoA_01/actions/variables/REPOB_MAIN_SHA)
+
+          if [ "$variable_status" = "200" ]; then
+            last_sha=$(jq -r '.value' variable.json)
+          elif [ "$variable_status" = "404" ]; then
+            last_sha=""
+          else
+            cat variable.json
+            exit 1
+          fi
+
+          latest_sha=$(curl --fail-with-body -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/w-yuan-quadient/RepoB_01/commits/main | jq -r '.sha')
+
+          echo "latest_sha=$latest_sha" >> "$GITHUB_OUTPUT"
+
+          if [ -z "$last_sha" ] || [ "$latest_sha" != "$last_sha" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "RepoB main changed: $last_sha -> $latest_sha"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "RepoB main unchanged: $latest_sha"
+          fi
+
   build_ab:
+    needs: check_repob_main
+    if: ${{ always() && (github.event_name != 'schedule' || needs.check_repob_main.outputs.changed == 'true') }}
     runs-on: windows-2022
 
     steps:
@@ -62,6 +115,53 @@ jobs:
         with:
           name: vector-libs-x64-release
           path: artifacts
+
+      - name: Store checked RepoB SHA
+        if: ${{ github.event_name == 'schedule' && needs.check_repob_main.outputs.changed == 'true' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GENERAL_TOKAN_20260714 }}
+          REPOB_MAIN_SHA: ${{ needs.check_repob_main.outputs.latest_sha }}
+        run: |
+          if (-not $env:GH_TOKEN) {
+            Write-Error "Secret GENERAL_TOKAN_20260714 is empty or unavailable in this workflow context"
+            exit 1
+          }
+
+          $body = @{ name = "REPOB_MAIN_SHA"; value = $env:REPOB_MAIN_SHA } | ConvertTo-Json -Compress
+          $headers = @(
+            "Accept: application/vnd.github+json",
+            "Authorization: Bearer $env:GH_TOKEN",
+            "Content-Type: application/json"
+          )
+          $responseFile = Join-Path $env:RUNNER_TEMP "repo-variable-response.json"
+
+          $statusCode = curl.exe --silent --show-error -L `
+            --write-out "%{http_code}" `
+            --output $responseFile `
+            -X PATCH `
+            -H $headers[0] `
+            -H $headers[1] `
+            -H $headers[2] `
+            https://api.github.com/repos/w-yuan-quadient/repoA_01/actions/variables/REPOB_MAIN_SHA `
+            -d $body
+
+          if ($statusCode -eq "404") {
+            $statusCode = curl.exe --silent --show-error -L `
+              --write-out "%{http_code}" `
+              --output $responseFile `
+              -X POST `
+              -H $headers[0] `
+              -H $headers[1] `
+              -H $headers[2] `
+              https://api.github.com/repos/w-yuan-quadient/repoA_01/actions/variables `
+              -d $body
+          }
+
+          if ([int]$statusCode -lt 200 -or [int]$statusCode -ge 300) {
+            Get-Content $responseFile
+            exit 1
+          }
 
       - name: Notify RepoC build completed
         if: success()
