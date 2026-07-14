@@ -22,6 +22,6 @@ jobs:
       - name: Checkout RepoB
         uses: actions/checkout@v4
         with:
-          repository: w-yuan-quadient/RepoB
+          repository: w-yuan-quadient/RepoB_01
           path: RepoB
           token: ${{ secrets.GENERAL_TOKAN_20260714 }}
