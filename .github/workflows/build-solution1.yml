@@ -54,3 +54,13 @@ jobs:
           name: vector-libs-x64-release
           path: artifacts
 
+      - name: Notify RepoC build completed
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GENERAL_TOKAN_20260714 }}
+        run: |
+          curl --fail-with-body -L -X POST `
+            -H "Accept: application/vnd.github+json" `
+            -H "Authorization: Bearer $env:GH_TOKEN" `
+            https://api.github.com/repos/w-yuan-quadient/RepoC_01/dispatches `
+            -d '{"event_type":"repoa_build_success"}'
