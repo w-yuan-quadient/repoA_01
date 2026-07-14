@@ -1,0 +1,20 @@
+name: Build Solution1 A+B
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [ repob_push_main ]
+
+jobs:
+  build_ab:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout RepoA
+        uses: actions/checkout@v4
+        with:
+          path: RepoA
