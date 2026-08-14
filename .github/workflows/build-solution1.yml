@@ -9,7 +9,7 @@ on:
 #  repository_dispatch:
 #    types: [ repob_push_main ]
   schedule:
-    - cron: '*/5 * * * *'
+#    - cron: '*/5 * * * *'
 
 concurrency:
   group: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'repob_push_main' && 'build-solution1-repob-push-main' || format('build-solution1-{0}', github.run_id) }}
